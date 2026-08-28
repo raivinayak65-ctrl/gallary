@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>Our Constellation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,600;1,9..144,500&family=Caveat:wght@500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  :root{
+    --night:#13111c;
+    --night-deep:#0b0a12;
+    --amber:#e8a15a;
+    --rose:#d98c9a;
+    --paper:#f3ead9;
+    --teal:#4a8a86;
+    --vh:1vh; /* set via JS to handle mobile browser chrome */
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{
+    margin:0; padding:0; width:100%;
+    height:100%;
+    background:var(--night-deep);
+    font-family:'Inter',sans-serif;
+    overflow:hidden;
+    color:var(--paper);
+    overscroll-behavior:none;
+    touch-action:none;
+  }
+  #canvas-holder{position:fixed; inset:0; z-index:0;}
+  canvas{display:block; touch-action:none;}
+
+  /* ---------- Landing overlay ---------- */
+  #landing{
+    position:fixed; inset:0; z-index:10;
+    display:flex; align-items:center; justify-content:center;
+    flex-direction:column;
+    text-align:center;
+    padding:24px;
+    transition:opacity 1.2s ease;
+    pointer-events:none;
+  }
+  #landing.active{pointer-events:all;}
+  #landing .eyebrow{
+    font-family:'Caveat',cursive;
+    font-size:clamp(17px,4.5vw,22px);
+    color:var(--rose);
+    margin-bottom:4px;
+    opacity:0.9;
+  }
+  #landing h1{
+    font-family:'Fraunces',serif;
+    font-weight:500;
+    font-size:clamp(30px,9vw,60px);
+    margin:0 0 26px 0;
+    color:var(--paper);
+    text-shadow:0 0 40px rgba(232,161,90,0.25);
+  }
+  #name-form{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    align-items:stretch;
+    width:100%;
+    max-width:380px;
+  }
+  #name-input{
+    flex:1;
+    background:rgba(255,255,255,0.07);
+    border:1px solid rgba(243,234,217,0.35);
+    border-radius:999px;
+    padding:16px 20px;
+    font-family:'Fraunces',serif;
+    font-style:italic;
+    font-size:17px;
+    color:var(--paper);
+    min-width:0;
+    outline:none;
+    transition:border-color .3s, background .3s;
+  }
+  #name-input::placeholder{color:rgba(243,234,217,0.45);}
+  #name-input:focus{border-color:var(--amber); background:rgba(255,255,255,0.1);}
+  #name-input,#password-input{box-sizing:border-box; width:100%; flex:none;}
+  #name-input{order:1;}
+  #password-input{order:2;}
+  #password-input{
+    flex:1;
+    background:rgba(255,255,255,0.07);
+    border:1px solid rgba(243,234,217,0.35);
+    border-radius:999px;
+    padding:16px 20px;
+    font-family:'Fraunces',serif;
+    font-style:italic;
+    font-size:17px;
+    color:var(--paper);
+    min-width:0;
+    outline:none;
+    transition:border-color .3s, background .3s;
+  }
+  #password-input::placeholder{color:rgba(243,234,217,0.45);}
+  #password-input:focus{border-color:var(--amber); background:rgba(255,255,255,0.1);}
+  #name-submit{
+    background:var(--amber);
+    color:var(--night-deep);
+    border:none;
+    border-radius:999px;
+    width:52px; height:52px;
+    font-size:20px;
+    cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    transition:transform .2s;
+    flex-shrink:0;
+    align-self:center;
+    order:3;
+  }
+  #name-submit:active{transform:scale(0.92);}
+  #name-hint{
+    margin-top:14px;
+    font-size:13px;
+    color:rgba(243,234,217,0.5);
+    min-height:18px;
+  }
+
+  /* Keeps the landing prompt above the mobile keyboard instead of centered-and-hidden */
+  #landing.kb-open{
+    align-items:flex-start;
+    padding-top:8vh;
+  }
+
+  /* ---------- Greeting flash ---------- */
+  #greeting{
+    position:fixed; inset:0; z-index:9;
+    display:flex; align-items:center; justify-content:center;
+    flex-direction:column;
+    padding:24px; text-align:center;
+    opacity:0; pointer-events:none;
+    transition:opacity 1s ease;
+  }
+  #greeting.show{opacity:1;}
+  #greeting .line1{
+    font-family:'Caveat',cursive;
+    font-size:clamp(20px,5vw,26px);
+    color:var(--rose);
+    margin-bottom:4px;
+  }
+  #greeting .line2{
+    font-family:'Fraunces',serif;
+    font-style:italic;
+    font-weight:500;
+    font-size:clamp(28px,9vw,52px);
+    color:var(--paper);
+  }
+
+  /* ---------- Gallery UI ---------- */
+  #gallery-ui{
+    position:fixed; inset:0; z-index:5;
+    pointer-events:none;
+    opacity:0;
+    transition:opacity 1.3s ease;
+  }
+  #gallery-ui.show{opacity:1;}
+  #top-bar{
+    position:absolute; top:0; left:0; right:0;
+    padding:calc(18px + env(safe-area-inset-top)) 18px 12px 18px;
+    display:flex; flex-direction:column; gap:2px;
+  }
+  #top-bar .title{
+    font-family:'Fraunces',serif;
+    font-style:italic;
+    font-size:17px;
+    color:var(--paper);
+    opacity:0.9;
+  }
+  #visitor-note{
+    font-family:'Inter',sans-serif;
+    font-size:11.5px;
+    color:rgba(243,234,217,0.55);
+    line-height:1.4;
+  }
+  #hint-bar{
+    position:absolute; bottom:calc(18px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%);
+    font-size:12.5px;
+    color:rgba(243,234,217,0.55);
+    text-align:center;
+    width:90%;
+  }
+
+  /* ---------- Photo modal (near-fullscreen on phones) ---------- */
+  #modal-overlay{
+    position:fixed; inset:0; z-index:20;
+    background:rgba(11,10,18,0.88);
+    display:flex; align-items:flex-end; justify-content:center;
+    opacity:0; pointer-events:none;
+    transition:opacity .3s ease;
+  }
+  #modal-overlay.show{opacity:1; pointer-events:all;}
+  #modal-card{
+    background:var(--paper);
+    border-radius:18px 18px 0 0;
+    padding:14px 18px calc(22px + env(safe-area-inset-bottom)) 18px;
+    width:100%;
+    max-height:92vh;
+    overflow-y:auto;
+    box-shadow:0 -20px 50px rgba(0,0,0,0.5);
+    transform:translateY(100%);
+    transition:transform .35s cubic-bezier(.2,.8,.3,1);
+  }
+  #modal-overlay.show #modal-card{transform:translateY(0);}
+  #modal-drag-handle{
+    width:38px; height:4px; border-radius:4px;
+    background:#c9bca3; margin:2px auto 14px auto;
+  }
+  #modal-photo{
+    width:100%; aspect-ratio:1/1;
+    border-radius:8px;
+    overflow:hidden;
+    margin-bottom:16px;
+    max-height:44vh;
+  }
+  #modal-photo canvas, #modal-photo img{width:100%; height:100%; display:block; object-fit:cover;}
+  #modal-title{
+    font-family:'Fraunces',serif;
+    font-weight:600;
+    font-size:20px;
+    color:var(--night-deep);
+    margin:0 0 2px 0;
+  }
+  #modal-year{
+    font-family:'Inter',sans-serif;
+    font-size:12px;
+    color:#8a7f6d;
+    letter-spacing:0.5px;
+    text-transform:uppercase;
+    margin-bottom:14px;
+  }
+  #modal-caption{
+    width:100%;
+    border:none;
+    border-top:1px dashed #c9bca3;
+    background:transparent;
+    font-family:'Caveat',cursive;
+    font-size:20px;
+    color:#3a3226;
+    padding-top:12px;
+    resize:none;
+    outline:none;
+    min-height:60px;
+  }
+  #modal-caption::placeholder{color:#a89a80;}
+  #modal-close{
+    position:absolute; top:calc(14px + env(safe-area-inset-top)); right:14px;
+    background:rgba(0,0,0,0.35); border:none;
+    width:36px; height:36px; border-radius:50%;
+    font-size:19px;
+    color:var(--paper);
+    cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    z-index:2;
+  }
+  #modal-save-note{
+    font-family:'Inter',sans-serif;
+    font-size:11px;
+    color:#a89a80;
+    margin-top:6px;
+    min-height:14px;
+  }
+
+  #loading{
+    position:fixed; inset:0; z-index:30;
+    background:var(--night-deep);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Caveat',cursive;
+    font-size:20px;
+    color:var(--amber);
+    transition:opacity .6s ease;
+  }
+
+  /* Larger screens: modal becomes a centered card instead of a bottom sheet */
+  @media (min-width:720px){
+    #modal-overlay{align-items:center;}
+    #modal-card{
+      width:min(420px,88vw);
+      border-radius:8px;
+      max-height:85vh;
+      transform:translateY(14px) rotate(-1deg);
+    }
+    #modal-overlay.show #modal-card{transform:translateY(0) rotate(-0.6deg);}
+    #modal-drag-handle{display:none;}
+    #modal-photo{max-height:none;}
+  }
+</style>
+</head>
+<body>
+
+<div id="loading">gathering the stars…</div>
+<div id="canvas-holder"></div>
+
+<!-- Landing: who are you -->
+<div id="landing">
+  <div class="eyebrow">before you come in</div>
+  <h1>Who are you?</h1>
+  <form id="name-form">
+    <input id="name-input" type="text" placeholder="type your name…" autocomplete="off" maxlength="24" enterkeyhint="go"/>
+    <button id="name-submit" type="submit" aria-label="Enter">→</button>
+    <input id="password-input" type="password" placeholder="create or enter your password" autocomplete="current-password" minlength="6" maxlength="72" enterkeyhint="go"/>
+  </form>
+  <div id="name-hint">new here? choose a password with at least 6 characters</div>
+</div>
+
+<!-- Greeting flash -->
+<div id="greeting">
+  <div class="line1" id="greeting-line1">so glad you're here,</div>
+  <div class="line2" id="greeting-line2">Name</div>
+</div>
+
+<!-- Gallery UI -->
+<div id="gallery-ui">
+  <div id="top-bar">
+    <div class="title">our constellation</div>
+    <div id="visitor-note"></div>
+  </div>
+  <div id="hint-bar">tap a star to open it · drag to look around</div>
+</div>
+
+<!-- Modal -->
+<div id="modal-overlay">
+  <div id="modal-card">
+    <button id="modal-close" aria-label="Close">×</button>
+    <div id="modal-drag-handle"></div>
+    <div id="modal-photo"></div>
+    <div id="modal-title"></div>
+    <div id="modal-year"></div>
+    <textarea id="modal-caption" placeholder="add a note about this memory…"></textarea>
+    <div id="modal-save-note"></div>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+   ADDING YOUR OWN PHOTOS
+   ---------------------------------------------------------------------
+   Each entry below is one "star" in the constellation. Right now they use
+   generated placeholder art since no photos are loaded yet. To use a real
+   photo, add an "img" field with either a hosted image URL or a base64
+   data URI. Everything else (title, year, accent color) is flavor text —
+   change it to match the real memory.
+   ========================================================================= */
+let memories = [];
+
+
+const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const isSmallScreen = window.innerWidth < 720;
+
+let captionCache = {};
+async function loadCaptions(){
+  const response = await fetch('/api/captions');
+  return response.ok ? response.json() : {};
+}
+async function saveCaption(id, text){
+  await fetch('/api/memories/' + encodeURIComponent(id) + '/caption', {
+    method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ text })
+  });
+}
+
+/* ---------------------------------------------------------------------
+   VIEWPORT HANDLING (mobile keyboard, browser chrome)
+   --------------------------------------------------------------------- */
+function setVH(){
+  document.documentElement.style.setProperty('--vh', `${window.innerHeight*0.01}px`);
+}
+setVH();
+window.addEventListener('resize', setVH);
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize', ()=>{
+    const shrunk = window.visualViewport.height < window.innerHeight*0.75;
+    document.getElementById('landing').classList.toggle('kb-open', shrunk);
+  });
+}
+
+/* ---------------------------------------------------------------------
+   THREE.JS SCENE — tuned for mid-range mobile GPUs
+   --------------------------------------------------------------------- */
+const holder = document.getElementById('canvas-holder');
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x0b0a12, 0.018);
+
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth/window.innerHeight, 0.1, 1000);
+camera.position.set(0,0,42);
+
+const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false, powerPreference:'high-performance' });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, isSmallScreen ? 2 : 2));
+holder.appendChild(renderer.domElement);
+
+function makeStarfield(count, spread, size, color, opacity){
+  const geo = new THREE.BufferGeometry();
+  const positions = new Float32Array(count*3);
+  for(let i=0;i<count;i++){
+    positions[i*3] = (Math.random()-0.5)*spread;
+    positions[i*3+1] = (Math.random()-0.5)*spread;
+    positions[i*3+2] = (Math.random()-0.5)*spread;
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(positions,3));
+  const mat = new THREE.PointsMaterial({ color, size, transparent:true, opacity, depthWrite:false });
+  return new THREE.Points(geo, mat);
+}
+// Lighter particle counts on small screens to keep frame rate smooth
+const farCount = isSmallScreen ? 700 : 1400;
+const nearCount = isSmallScreen ? 220 : 400;
+const farStars = makeStarfield(farCount, 340, 0.7, 0xf3ead9, 0.55);
+const nearStars = makeStarfield(nearCount, 160, 1.1, 0xe8a15a, 0.35);
+scene.add(farStars, nearStars);
+
+const glow = new THREE.PointLight(0xe8a15a, 1.1, 200);
+glow.position.set(0,0,30);
+scene.add(glow);
+scene.add(new THREE.AmbientLight(0x1a1625, 1.2));
+
+function polaroidTexture(mem){
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 256;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#f3ead9';
+  ctx.fillRect(0,0,256,256);
+  const grad = ctx.createLinearGradient(0,0,256,220);
+  grad.addColorStop(0, mem.color);
+  grad.addColorStop(1, '#13111c');
+  ctx.fillStyle = grad;
+  ctx.fillRect(14,14,228,190);
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.font = '54px serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('✦', 128, 108);
+  ctx.fillStyle = '#3a3226';
+  ctx.font = 'italic 16px Georgia, serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(mem.title.length>22 ? mem.title.slice(0,20)+'…' : mem.title, 18, 232);
+  const tex = new THREE.CanvasTexture(c);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+const starGroup = new THREE.Group();
+scene.add(starGroup);
+const memMeshes = [];
+const constellationObjects = [];
+const raycaster = new THREE.Raycaster();
+const pointerVec = new THREE.Vector2();
+
+const radius = 16;
+function clearConstellation(){
+  constellationObjects.forEach(object => {
+    starGroup.remove(object);
+    if(object.material){
+      if(object.material.map) object.material.map.dispose();
+      object.material.dispose();
+    }
+    if(object.geometry) object.geometry.dispose();
+  });
+  constellationObjects.length = 0;
+  memMeshes.length = 0;
+}
+
+function buildConstellation(person){
+  clearConstellation();
+  const personName = person.trim().toLowerCase();
+  const userMemories = memories.filter(mem =>
+    mem.img && mem.person && mem.person.trim().toLowerCase() === personName
+  );
+
+  userMemories.forEach((mem, i) => {
+    const phi = Math.acos(1 - 2*(i+0.5)/userMemories.length);
+    const theta = Math.PI * (1 + Math.sqrt(5)) * i;
+    const x = radius * Math.sin(phi) * Math.cos(theta);
+    const y = radius * Math.sin(phi) * Math.sin(theta);
+    const z = radius * Math.cos(phi);
+    const tex = polaroidTexture(mem);
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent:true });
+    const sprite = new THREE.Sprite(mat);
+    const s = isSmallScreen ? 5.2 : 4.6;
+    sprite.scale.set(s,s,1);
+    sprite.position.set(x,y,z);
+    sprite.userData = mem;
+    starGroup.add(sprite);
+    constellationObjects.push(sprite);
+    memMeshes.push(sprite);
+  });
+
+  const lineMat = new THREE.LineBasicMaterial({ color:0xe8a15a, transparent:true, opacity:0.18 });
+  for(let i=0;i<memMeshes.length;i++){
+    for(let j=i+1;j<memMeshes.length;j++){
+      const d = memMeshes[i].position.distanceTo(memMeshes[j].position);
+      if(d < 15){
+        const geometry = new THREE.BufferGeometry().setFromPoints([memMeshes[i].position, memMeshes[j].position]);
+        const line = new THREE.Line(geometry, lineMat);
+        starGroup.add(line);
+        constellationObjects.push(line);
+      }
+    }
+  }
+  return userMemories.length;
+}
+starGroup.scale.set(0.001,0.001,0.001);
+starGroup.visible = false;
+
+/* ---------------------------------------------------------------------
+   TOUCH-FIRST INTERACTION (falls back to mouse for desktop)
+   --------------------------------------------------------------------- */
+let mode = 'landing'; // landing | flying | gallery
+let targetRotX = 0, targetRotY = 0;
+let curRotX = 0, curRotY = 0;
+let dragging = false, lastX=0, lastY=0, moved=false;
+const DRAG_THRESHOLD = 6; // px of movement before a tap becomes a drag
+
+function pointerDown(x,y){
+  if(mode!=='gallery') return;
+  dragging = true; moved = false; lastX=x; lastY=y;
+}
+function pointerMove(x,y){
+  if(!dragging || mode!=='gallery') return;
+  const dx = x-lastX, dy = y-lastY;
+  if(Math.abs(dx)+Math.abs(dy) > DRAG_THRESHOLD) moved = true;
+  targetRotY += dx*0.0032;
+  targetRotX += dy*0.0016;
+  lastX=x; lastY=y;
+}
+function pointerUp(x,y){
+  if(mode==='gallery' && !moved){
+    tryOpenStar(x,y);
+  }
+  dragging = false;
+}
+
+const el = renderer.domElement;
+el.addEventListener('touchstart', (e)=>{ const t=e.touches[0]; pointerDown(t.clientX,t.clientY); }, {passive:true});
+el.addEventListener('touchmove', (e)=>{ const t=e.touches[0]; pointerMove(t.clientX,t.clientY); }, {passive:true});
+el.addEventListener('touchend', (e)=>{ const t=e.changedTouches[0]; pointerUp(t.clientX,t.clientY); }, {passive:true});
+el.addEventListener('mousedown', (e)=> pointerDown(e.clientX,e.clientY));
+window.addEventListener('mousemove', (e)=> pointerMove(e.clientX,e.clientY));
+window.addEventListener('mouseup', (e)=> pointerUp(e.clientX,e.clientY));
+
+function tryOpenStar(x,y){
+  pointerVec.x = (x/window.innerWidth)*2-1;
+  pointerVec.y = -(y/window.innerHeight)*2+1;
+  raycaster.setFromCamera(pointerVec, camera);
+  raycaster.params.Sprite = raycaster.params.Sprite || {};
+  const hits = raycaster.intersectObjects(memMeshes);
+  if(hits.length){ openModal(hits[0].object.userData); }
+}
+
+window.addEventListener('resize', ()=>{
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+/* ---------------------------------------------------------------------
+   ANIMATION LOOP
+   --------------------------------------------------------------------- */
+let flightT = 0, flightDuration = prefersReducedMotion ? 0.6 : 2.6, flying=false;
+const clock = new THREE.Clock();
+
+function animate(){
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta();
+  const elapsed = clock.getElapsedTime();
+
+  if(!prefersReducedMotion){
+    farStars.rotation.y += dt*0.004;
+    nearStars.rotation.y -= dt*0.006;
+  }
+
+  if(mode==='landing'){
+    if(!prefersReducedMotion){
+      camera.position.x = Math.sin(elapsed*0.05)*2;
+      camera.position.y = Math.cos(elapsed*0.04)*1;
+    }
+    camera.lookAt(0,0,0);
+  }
+
+  if(flying){
+    flightT += dt;
+    let p = Math.min(flightT/flightDuration, 1);
+    p = 1 - Math.pow(1-p, 3);
+    camera.position.z = 42 + (6-42)*p;
+    camera.position.x = prefersReducedMotion ? 0 : Math.sin(elapsed*0.05)*2*(1-p);
+    camera.position.y = prefersReducedMotion ? 0 : Math.cos(elapsed*0.04)*1*(1-p);
+    starGroup.scale.setScalar(0.001 + (1-0.001)*p);
+    camera.lookAt(0,0,0);
+    if(p>=1){ flying=false; mode='gallery'; }
+  }
+
+  if(mode==='gallery'){
+    curRotX += (targetRotX-curRotX)*0.04;
+    curRotY += (targetRotY-curRotY)*0.04;
+    if(!prefersReducedMotion) starGroup.rotation.y += 0.0009;
+    camera.position.x = Math.sin(curRotY)*6;
+    camera.position.z = Math.cos(curRotY)*6 + 4;
+    camera.position.y = curRotX*4;
+    camera.lookAt(0,0,0);
+    if(!prefersReducedMotion){
+      memMeshes.forEach((m,i)=>{ m.material.rotation = Math.sin(elapsed*0.3+i)*0.02; });
+    }
+  }
+
+  renderer.render(scene, camera);
+}
+animate();
+
+/* ---------------------------------------------------------------------
+   FLOW: landing -> greeting -> flight -> gallery
+   --------------------------------------------------------------------- */
+const landing = document.getElementById('landing');
+const greeting = document.getElementById('greeting');
+const galleryUI = document.getElementById('gallery-ui');
+const nameForm = document.getElementById('name-form');
+const nameInput = document.getElementById('name-input');
+const passwordInput = document.getElementById('password-input');
+const visitorNote = document.getElementById('visitor-note');
+
+async function authenticate(name, password){
+  const response = await fetch('/api/auth', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ name, password })
+  });
+  const result = await response.json();
+  if(!response.ok) throw new Error(result.error || 'Unable to sign in.');
+  return result;
+}
+async function loadMemories(){
+  const response = await fetch('/api/memories');
+  if(!response.ok) throw new Error('Unable to load your memories.');
+  memories = await response.json();
+}
+nameForm.addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const name = nameInput.value.trim();
+  const password = passwordInput.value;
+  if(!name){ nameHint.textContent = 'tell us who you are first'; return; }
+  if(password.length < 6){ nameHint.textContent = 'use a password with at least 6 characters'; passwordInput.focus(); return; }
+  const submit = nameForm.querySelector('button');
+  submit.disabled = true; nameHint.textContent = '';
+  try{
+    const access = await authenticate(name, password);
+    await loadMemories();
+    captionCache = await loadCaptions();
+    buildConstellation(access.name);
+    const photoCount = memories.length;
+    document.getElementById('greeting-line1').textContent = access.created ? 'your password is set,' : 'welcome back,';
+    document.getElementById('greeting-line2').textContent = access.name;
+    document.querySelector('#top-bar .title').textContent = access.name + "'s constellation";
+    document.getElementById('hint-bar').textContent = photoCount
+      ? 'tap a star to open it · ' + photoCount + ' photo' + (photoCount === 1 ? '' : 's') + ' in your constellation'
+      : 'no photos have been added to your constellation yet';
+    visitorNote.textContent = photoCount
+      ? photoCount + ' memor' + (photoCount === 1 ? 'y' : 'ies') + ' shining for you'
+      : 'your account is ready; photos can be added by an administrator';
+    nameInput.blur(); passwordInput.value = '';
+    landing.style.opacity = '0'; landing.classList.remove('active','kb-open'); greeting.classList.add('show');
+    setTimeout(()=>{ greeting.classList.remove('show'); starGroup.visible = true; flying = true; flightT = 0; galleryUI.classList.add('show'); }, prefersReducedMotion ? 900 : 2200);
+  }catch(error){
+    nameHint.textContent = error.message;
+    passwordInput.value = ''; passwordInput.focus(); submit.disabled = false;
+  }
+});
+
+/* ---------------------------------------------------------------------
+   MODAL — bottom sheet on phones, centered card on larger screens
+   --------------------------------------------------------------------- */
+const modalOverlay = document.getElementById('modal-overlay');
+const modalCard = document.getElementById('modal-card');
+const modalPhoto = document.getElementById('modal-photo');
+const modalTitle = document.getElementById('modal-title');
+const modalYear = document.getElementById('modal-year');
+const modalCaption = document.getElementById('modal-caption');
+const modalSaveNote = document.getElementById('modal-save-note');
+const modalClose = document.getElementById('modal-close');
+let currentMemId = null;
+let saveTimer = null;
+
+function openModal(mem){
+  currentMemId = mem.id;
+  modalPhoto.innerHTML = '';
+  if(mem.img){
+    const img = document.createElement('img');
+    img.src = mem.img;
+    modalPhoto.appendChild(img);
+  } else {
+    const c = document.createElement('canvas');
+    c.width=400; c.height=400;
+    const ctx = c.getContext('2d');
+    const grad = ctx.createLinearGradient(0,0,400,400);
+    grad.addColorStop(0, mem.color);
+    grad.addColorStop(1, '#13111c');
+    ctx.fillStyle = grad; ctx.fillRect(0,0,400,400);
+    ctx.fillStyle='rgba(255,255,255,0.85)';
+    ctx.font='120px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('✦',200,200);
+    modalPhoto.appendChild(c);
+  }
+  modalTitle.textContent = mem.title;
+  modalYear.textContent = mem.year;
+  modalCaption.value = captionCache[mem.id] || '';
+  modalSaveNote.textContent = '';
+  modalOverlay.classList.add('show');
+}
+function closeModal(){ modalOverlay.classList.remove('show'); }
+modalClose.addEventListener('click', closeModal);
+modalOverlay.addEventListener('click', (e)=>{ if(e.target===modalOverlay) closeModal(); });
+
+// Swipe-down-to-dismiss on the bottom sheet (phones)
+let sheetStartY = null, sheetDY = 0;
+modalCard.addEventListener('touchstart', (e)=>{ sheetStartY = e.touches[0].clientY; sheetDY = 0; }, {passive:true});
+modalCard.addEventListener('touchmove', (e)=>{
+  if(sheetStartY===null) return;
+  sheetDY = e.touches[0].clientY - sheetStartY;
+  if(sheetDY > 0) modalCard.style.transform = `translateY(${sheetDY}px)`;
+}, {passive:true});
+modalCard.addEventListener('touchend', ()=>{
+  if(sheetDY > 100){ closeModal(); }
+  modalCard.style.transform = '';
+  sheetStartY = null;
+});
+
+modalCaption.addEventListener('input', ()=>{
+  clearTimeout(saveTimer);
+  modalSaveNote.textContent = 'saving…';
+  saveTimer = setTimeout(async ()=>{
+    await saveCaption(currentMemId, modalCaption.value);
+    captionCache[currentMemId] = modalCaption.value;
+    modalSaveNote.textContent = 'saved — everyone will see this note';
+  }, 500);
+});
+
+/* ---------------------------------------------------------------------
+   INIT
+   --------------------------------------------------------------------- */
+(async function init(){
+  document.getElementById('loading').style.opacity = '0';
+  setTimeout(()=> document.getElementById('loading').style.display='none', 650);
+  landing.classList.add('active');
+  if(!isSmallScreen) nameInput.focus(); // avoid auto-popping the keyboard on phones
+})();
+</script>
+</body>
+</html>

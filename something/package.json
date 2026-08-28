@@ -1,0 +1,13 @@
+{
+  "name": "memory-constellation",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "prepare": "node scripts/migrate-content.mjs",
+    "start": "node server.mjs"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}
